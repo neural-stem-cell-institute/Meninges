@@ -246,26 +246,7 @@ x<-intersect(rownames(AmAc.Ac),rownames(AmAc.Am))
 y<-intersect(x,rownames(AmAc.PmPC))
 z<-data.frame(AmAc.PmPC[y,],AmAc.Ac[y,14:18],AmAc.Am[y,14:18])
 write.csv(z,"intersection_AmAC.PMPC_vs_AmAc.Ac_vs_AmAc.Am.csv")
-x<-intersect(rownames(AmAc.PmPC),rownames(AmAc.Am))
-x<-intersect(rownames(AmAc.Ac),rownames(AmAc.PmPC))
-m<-intersect(z$proteins,y)
 
-
-
-View(Ac.Am)
-View(PmPc.Pm)
-View(AmAc.PmPC)
-View(Am.Pm)
-View(AmAc.Ac)
-View(AmAc.Am)
-
-
-View(AmAc.Am.conc)
-View(AmAc.Ac.conc)
-View(Am.Pm.conc)
-View(Ac.Am.conc)
-View(PmPc.Pm.conc)
-View(AmAc.PmPC.conc)
 
 #####aging arrays####
 load("Protein.arrays.clean.RData")
@@ -298,8 +279,6 @@ aged.Am.AC<-biotech.analyzer(norm.pro.aged,c("Am1","Am2"),c("Ac1","Ac2"),sample.
 
 write.csv(aged.Am.AC,"aged.Am.vs.Ac.csv")
 write.csv(aged.AmAc.AC,"aged.AmAc.vs.Ac.csv")
-
-save.image("Protein arrays finished.RData")
 
 #########normalize all arrays together
 
