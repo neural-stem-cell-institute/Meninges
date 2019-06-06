@@ -15,52 +15,56 @@ library(cluster)
 library(reshape2)
 
 # sessionInfo()
-# R version 3.5.1 (2018-07-02)
-# Platform: x86_64-w64-mingw32/x64 (64-bit)
-# Running under: Windows 7 x64 (build 7601) Service Pack 1
+#R version 3.6.0 (2019-04-26)
+#Platform: x86_64-w64-mingw32/x64 (64-bit)
+#Running under: Windows 10 x64 (build 17763)
 
-# Matrix products: default
+#Matrix products: default
 
-# locale:
-#   [1] LC_COLLATE=English_United States.1252  LC_CTYPE=English_United States.1252    LC_MONETARY=English_United States.1252
-# [4] LC_NUMERIC=C                           LC_TIME=English_United States.1252    
+#Random number generation:
+# RNG:     Mersenne-Twister 
+# Normal:  Inversion 
+# Sample:  Rounding 
+ 
+#locale:
+#[1] LC_COLLATE=English_United States.1252  LC_CTYPE=English_United States.1252    LC_MONETARY=English_United States.1252
+#[4] LC_NUMERIC=C                           LC_TIME=English_United States.1252    
 
-# attached base packages:
-#   [1] parallel  stats     graphics  grDevices utils     datasets  methods   base     
+#attached base packages:
+#[1] parallel  stats     graphics  grDevices utils     datasets  methods   base     
 
-# other attached packages:
-#   [1] reshape2_1.4.3    cluster_2.0.7-1   dplyr_0.7.7       psycho_0.3.7      plyr_1.8.4        ggplot2_3.1.0    
-# [7] doParallel_1.0.14 iterators_1.0.10  foreach_1.4.4    
+#other attached packages:
+# [1] stringr_1.4.0     reshape2_1.4.3    cluster_2.0.9     dplyr_0.8.1       psycho_0.4.9      plyr_1.8.4       
+# [7] ggplot2_3.1.1     doParallel_1.0.14 iterators_1.0.10  foreach_1.4.4    
 
-# loaded via a namespace (and not attached):
-#   [1] backports_1.1.2        Hmisc_4.1-1            BDgraph_2.52           igraph_1.2.2           lazyeval_0.2.1        
-# [6] splines_3.5.1          crosstalk_1.0.0        rstantools_1.5.1       inline_0.3.15          digest_0.6.18         
-# [11] htmltools_0.3.6        matrixcalc_1.0-3       rsconnect_0.8.8        lmerTest_3.0-1         magrittr_1.5          
-# [16] checkmate_1.8.5        sna_2.4                matrixStats_0.54.0     xts_0.11-1             prettyunits_1.0.2     
-# [21] jpeg_0.1-8             sem_3.1-9              colorspace_1.3-2       callr_3.0.0            crayon_1.3.4          
-# [26] lme4_1.1-18-1          bindr_0.1.1            survival_2.42-3        zoo_1.8-4              glue_1.3.0            
-# [31] gtable_0.2.0           ppcor_1.1              emmeans_1.2.4          MatrixModels_0.4-1     mi_1.0                
-# [36] pkgbuild_1.0.2         rstan_2.18.1           ggm_2.3                abind_1.4-5            scales_1.0.0          
-# [41] mvtnorm_1.0-8          miniUI_0.1.1.1         Rcpp_0.12.19           xtable_1.8-3           htmlTable_1.12        
-# [46] foreign_0.8-70         Formula_1.2-3          stats4_3.5.1           StanHeaders_2.18.0     DT_0.4                
-# [51] htmlwidgets_1.3        threejs_0.3.1          RColorBrewer_1.1-2     lavaan_0.6-3           acepack_1.4.1         
-# [56] pkgconfig_2.0.2        loo_2.0.0              manipulate_1.0.1       nnet_7.3-12            tidyselect_0.2.5      
-# [61] rlang_0.3.0            later_0.7.5            ggcorrplot_0.1.2       munsell_0.5.0          tools_3.5.1           
-# [66] cli_1.0.1              statnet.common_4.1.4   broom_0.5.0            ggridges_0.5.1         fdrtool_1.2.15        
-# [71] stringr_1.3.1          arm_1.10-1             yaml_2.2.0             processx_3.2.0         knitr_1.20            
-# [76] purrr_0.2.5            bindrcpp_0.2.2         glasso_1.10            pbapply_1.3-4          nlme_3.1-137          
-# [81] whisker_0.3-2          mime_0.6               rstanarm_2.18.1        compiler_3.5.1         bayesplot_1.6.0       
-# [86] shinythemes_1.1.1      rstudioapi_0.8         png_0.1-7              huge_1.2.7             tibble_1.4.2          
-# [91] pbivnorm_0.6.0         DescTools_0.99.25      stringi_1.2.4          ps_1.2.0               qgraph_1.5            
-# [96] lattice_0.20-35        Matrix_1.2-14          psych_1.8.4            nloptr_1.2.1           markdown_0.8          
-# [101] shinyjs_1.0            pillar_1.3.0           estimability_1.3       data.table_1.11.8      corpcor_1.6.9         
-# [106] httpuv_1.4.5           R6_2.3.0               latticeExtra_0.6-28    nFactors_2.3.3         MuMIn_1.42.1          
-# [111] promises_1.0.1         network_1.13.0.1       gridExtra_2.3          BayesFactor_0.9.12-4.2 codetools_0.2-15      
-# [116] boot_1.3-20            colourpicker_1.0       MASS_7.3-50            gtools_3.8.1           assertthat_0.2.0      
-# [121] rjson_0.2.20           withr_2.1.2            shinystan_2.5.0        mnormt_1.5-5           expm_0.999-3          
-# [126] grid_3.5.1             rpart_4.1-13           tidyr_0.8.1            coda_0.19-2            minqa_1.2.4           
-# [131] d3Network_0.5.2.1      numDeriv_2016.8-1      shiny_1.1.0            base64enc_0.1-3        ellipse_0.4.1         
-# [136] dygraphs_1.1.1.6  
+#loaded via a namespace (and not attached):
+ # [1] backports_1.1.4        Hmisc_4.2-0            BDgraph_2.59           igraph_1.2.4.1         lazyeval_0.2.2        
+ # [6] splines_3.6.0          crosstalk_1.0.0        rstantools_1.5.1       inline_0.3.15          digest_0.6.19         
+ #[11] htmltools_0.3.6        rsconnect_0.8.13       lmerTest_3.1-0         magrittr_1.5           checkmate_1.9.3       
+ #[16] matrixStats_0.54.0     MCMCpack_1.4-4         xts_0.11-2             sandwich_2.5-1         prettyunits_1.0.2     
+ #[21] jpeg_0.1-8             colorspace_1.4-1       xfun_0.7               callr_3.2.0            crayon_1.3.4          
+ #[26] lme4_1.1-21            survival_2.44-1.1      zoo_1.8-6              glue_1.3.1             gtable_0.3.0          
+ #[31] ppcor_1.1              emmeans_1.3.4          MatrixModels_0.4-1     pkgbuild_1.0.3         rstan_2.18.2          
+ #[36] ggm_2.3                abind_1.4-5            SparseM_1.77           scales_1.0.0           mvtnorm_1.0-10        
+ #[41] miniUI_0.1.1.1         Rcpp_1.0.1             xtable_1.8-4           htmlTable_1.13.1       foreign_0.8-71        
+ #[46] Formula_1.2-3          StanHeaders_2.18.1     stats4_3.6.0           DT_0.6                 htmlwidgets_1.3       
+ #[51] threejs_0.3.1          RColorBrewer_1.1-2     lavaan_0.6-3           acepack_1.4.1          pkgconfig_2.0.2       
+ #[56] loo_2.1.0              manipulate_1.0.1       nnet_7.3-12            labeling_0.3           tidyselect_0.2.5      
+ #[61] rlang_0.3.4            later_0.8.0            ggcorrplot_0.1.3       munsell_0.5.0          tools_3.6.0           
+ #[66] cli_1.1.0              generics_0.0.2         broom_0.5.2            ggridges_0.5.1         fdrtool_1.2.15        
+ #[71] blavaan_0.3-4          mcmc_0.9-6             processx_3.3.1         knitr_1.23             purrr_0.3.2           
+ #[76] glasso_1.10            pbapply_1.4-0          nlme_3.1-140           whisker_0.3-2          mime_0.6              
+ #[81] quantreg_5.38          rstanarm_2.18.2        nonnest2_0.5-2         compiler_3.6.0         bayesplot_1.7.0       
+ #[86] shinythemes_1.1.2      rstudioapi_0.10        png_0.1-7              huge_1.3.2             tibble_2.1.2          
+ #[91] pbivnorm_0.6.0         DescTools_0.99.28      stringi_1.4.3          ps_1.3.0               qgraph_1.6.2          
+ #[96] lattice_0.20-38        Matrix_1.2-17          psych_1.8.12           nloptr_1.2.1           markdown_0.9          
+#[101] shinyjs_1.0            CompQuadForm_1.4.3     pillar_1.4.1           estimability_1.3       data.table_1.12.2     
+#[106] corpcor_1.6.9          httpuv_1.5.1           R6_2.4.0               latticeExtra_0.6-28    nFactors_2.3.3        
+#[111] MuMIn_1.43.6           promises_1.0.1         gridExtra_2.3          BayesFactor_0.9.12-4.2 codetools_0.2-16      
+#[116] boot_1.3-22            colourpicker_1.0       MASS_7.3-51.4          gtools_3.8.1           assertthat_0.2.1      
+#[121] rjson_0.2.20           withr_2.1.2            shinystan_2.5.0        mnormt_1.5-5           expm_0.999-4          
+#[126] grid_3.6.0             rpart_4.1-15           tidyr_0.8.3            coda_0.19-2            minqa_1.2.4           
+#[131] d3Network_0.5.2.1      numDeriv_2016.8-1      shiny_1.3.2            base64enc_0.1-3        dygraphs_1.1.1.6  
 
 cl <- makeCluster(1)
 registerDoParallel(cl)
