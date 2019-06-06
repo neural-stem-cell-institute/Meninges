@@ -248,7 +248,7 @@ z<-data.frame(AmAc.PmPC[y,],AmAc.Ac[y,14:18],AmAc.Am[y,14:18])
 write.csv(z,"intersection_AmAC.PMPC_vs_AmAc.Ac_vs_AmAc.Am.csv")
 x<-intersect(rownames(AmAc.PmPC),rownames(AmAc.Am))
 x<-intersect(rownames(AmAc.Ac),rownames(AmAc.PmPC))
-m<-intersect(z,y)
+m<-intersect(z$proteins,y)
 
 
 
