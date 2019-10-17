@@ -979,7 +979,22 @@ p2
 p3
 p4
 dev.off()
+######make a node table for cytoscape
+x<-edges.interactions.cl1
 
+y<-edges.interactions.cl1[edges.interactions.cl1$Groups=="Peri_ligands",]
+y<-y[which(y$A1_astro>5),]
+z<-y[which(y$B1_peri>2),]
+z<-data.frame(as.character(edges.interactions.cl1$A1),as.character(edges.interactions.cl1$A1_type),
+	edges.interactions.cl1$A1_astro,edges.interactions.cl1$A1_peri)
+y<-data.frame(as.character(edges.interactions.cl1$B1),as.character(edges.interactions.cl1$B1_type),
+	edges.interactions.cl1$B1_astro,edges.interactions.cl1$B1_peri)
+colnames(z)<-c("shared name","Type","Astro","Peri")
+colnames(y)<-c("shared name","Type","Astro","Peri")
+z<-rbind(z,y)
+library(dplyr)
+z<-distinct(z)
+write.csv(z,"Node.table.cl1.csv")
 
 
 
