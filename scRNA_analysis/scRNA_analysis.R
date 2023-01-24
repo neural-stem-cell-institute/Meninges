@@ -290,12 +290,45 @@ DimPlot(obj,group.by="celltype",label=T)
 DimPlot(obj,group.by="position")
 DimPlot(obj,group.by="age")
 DimPlot(obj,label=T)
-
+obj<-SetIdent(obj,value="celltype")
+obj@misc$celltype<-FindAllMarkers(obj,only.pos=T)
 
 ###OK cell types now assigned to each object and looks good 
 
+x<-DotPlot(obj,features=c("Negr1","Igfbp2","Ppp1r1a","Serpine2",
+                          "Runx1t1","Epha5","Tjp1","Nfix","Meis2",
+                          "Col1a2","Dcn","Ebf1","Pdzd2",
+                          "Nrp1","Rbpj","Angpt1","Runx1","Fbln5","Vegfc",
+                          "Myh11","Pecam1","Abcc9","Ets1","Erg"),
+           group.by="celltype")
+x+coord_flip()
+
+#####enrichment testing
+GOBP <- msigdb_gsets(species="Mus musculus", category="C5", subcategory="BP")
+eres<-enrich_test(markers_df=obj@misc$markers,species_x="Mus musculus",genome_genes=42937)
+go_vis_sc<-GO_visualization(eres$Enriched_df,markers_df=obj@misc$markers,GOcats=GOBP,goterms=goterms,numcats=10,org_db="org.Mm.eg.db")
+go_vis_sc$plot
+data(RP)
+RP<-RPprep(RP,"Mus")
+data(RPR)
+RP_ready<-reactome_prep(eres$Enriched_df,RP=RP,RP_adj=RPR)
+react_vis<-reactome_visualization(RP_ready,RPR,RP=RP)
+react_vis$plot_object
+
+write.csv(go_vis_sc$GO_sem,"GO_table.csv")
+write.csv(RP_ready,"Reactome_table.csv")
+
+eres_y<-enrich_test(markers_df=y1@misc$markers,species_x="Mus musculus",genome_genes=42937)
+go_vis_y<-GO_visualization(eres_y$Enriched_df,markers_df=y1@misc$markers,GOcats=GOBP,goterms=goterms,numcats=10,org_db="org.Mm.eg.db")
+go_vis_y$plot
 
 
+eres_o<-enrich_test(markers_df=o1@misc$markers,species_x="Mus musculus",genome_genes=42937)
+go_vis_o<-GO_visualization(eres_o$Enriched_df,markers_df=o1@misc$markers,GOcats=GOBP,goterms=goterms,numcats=10,org_db="org.Mm.eg.db")
+go_vis_o$plot
+
+write.csv(go_vis_y$GO_sem,"GO_y_table.csv")
+write.csv(go_vis_o$GO_sem,"GO_o_table.csv")
 
 
 
