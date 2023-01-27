@@ -6,6 +6,7 @@ library(Seurat)
 library(hypeR)
 library(screp)
 library(stringr)
+library(disgenet2r)
 
 ######set up annotation files
 SYMBOLS<-unlist(as.list(org.Mm.egSYMBOL))
@@ -302,8 +303,39 @@ x<-DotPlot(obj,features=c("Negr1","Igfbp2","Ppp1r1a","Serpine2",
                           "Myh11","Pecam1","Abcc9","Ets1","Erg"),
            group.by="celltype")
 x+coord_flip()
+###set up new metadata making groups of age and position
+###1=YA,2=OA,3=YP,4=OP
+x<-obj@meta.data$age
+x<-replace(x,which(x=="young"),0)
+x<-replace(x,which(x=="old"),1)
+x<-as.numeric(x)
+
+z<-obj@meta.data$position
+z<-replace(z,which(z=="Anterior"),1)
+z<-replace(z,which(z=="Posterior"),3)
+z<-as.numeric(z)
+
+z<-x+z
+obj@meta.data$group<-z
+obj<-SetIdent(obj,value="group")
+obj@misc$group<-FindAllMarkers(obj,only.pos=T)
 
 #####enrichment testing
+###disease
+z<-intersect(obj@misc$group[obj@misc$group$p_val_adj<0.01,]$gene,
+             obj@misc$celltype[obj@misc$celltype$p_val_adj<0.01,]$gene)
+
+
+disgenet_api_key <- get_disgenet_api_key(email="nathanboles@neuralsci.org",password="x65HzA4J3PeVYCE")
+
+dq<-gene2disease(gene=toupper(z),score = c(0.3,1),api_key=disgenet_api_key )
+dq@qresult
+
+res<-disease_enrichment(toupper(z))
+y<-res@qresult
+y<-y[y$FDR<0.01,]
+
+##gene ontology
 GOBP <- msigdb_gsets(species="Mus musculus", category="C5", subcategory="BP")
 eres<-enrich_test(markers_df=obj@misc$markers,species_x="Mus musculus",genome_genes=42937)
 go_vis_sc<-GO_visualization(eres$Enriched_df,markers_df=obj@misc$markers,GOcats=GOBP,goterms=goterms,numcats=10,org_db="org.Mm.eg.db")
