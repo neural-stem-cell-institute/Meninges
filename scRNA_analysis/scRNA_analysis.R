@@ -325,19 +325,22 @@ obj@misc$group<-FindAllMarkers(obj,only.pos=T)
 z<-intersect(obj@misc$group[obj@misc$group$p_val_adj<0.01,]$gene,
              obj@misc$celltype[obj@misc$celltype$p_val_adj<0.01,]$gene)
 
-
-disgenet_api_key <- get_disgenet_api_key(email="nathanboles@neuralsci.org",password="x65HzA4J3PeVYCE")
-
-dq<-gene2disease(gene=toupper(z),score = c(0.3,1),api_key=disgenet_api_key )
-dq@qresult
-
 res<-disease_enrichment(toupper(z))
-y<-res@qresult
-y<-y[y$FDR<0.01,]
+plot(res, class = "Enrichment", count =3,  cutoff= 0.01, nchars=50)
+
+ze<-obj@misc$celltype[obj@misc$celltype$p_val_adj<0.01,]
+ze<-intersect(z,ze[grep("Endo",ze$cluster),]$gene)
+res_e<-disease_enrichment(toupper(ze))
+plot(res_e, class = "Enrichment", count =3,  cutoff= 0.01, nchars=50)
+
+zf<-obj@misc$celltype[obj@misc$celltype$p_val_adj<0.01,]
+zf<-intersect(z,zf[grep("Fibro",zf$cluster),]$gene)
+res_f<-disease_enrichment(toupper(zf))
+plot(res_f, class = "Enrichment", count =3,  cutoff= 0.01, nchars=50)
 
 ##gene ontology
 GOBP <- msigdb_gsets(species="Mus musculus", category="C5", subcategory="BP")
-eres<-enrich_test(markers_df=obj@misc$markers,species_x="Mus musculus",genome_genes=42937)
+eres<-enrich_test(markers_df=obj@misc$celltype,species_x="Mus musculus",genome_genes=42937)
 go_vis_sc<-GO_visualization(eres$Enriched_df,markers_df=obj@misc$markers,GOcats=GOBP,goterms=goterms,numcats=10,org_db="org.Mm.eg.db")
 go_vis_sc$plot
 data(RP)
@@ -349,18 +352,6 @@ react_vis$plot_object
 
 write.csv(go_vis_sc$GO_sem,"GO_table.csv")
 write.csv(RP_ready,"Reactome_table.csv")
-
-eres_y<-enrich_test(markers_df=y1@misc$markers,species_x="Mus musculus",genome_genes=42937)
-go_vis_y<-GO_visualization(eres_y$Enriched_df,markers_df=y1@misc$markers,GOcats=GOBP,goterms=goterms,numcats=10,org_db="org.Mm.eg.db")
-go_vis_y$plot
-
-
-eres_o<-enrich_test(markers_df=o1@misc$markers,species_x="Mus musculus",genome_genes=42937)
-go_vis_o<-GO_visualization(eres_o$Enriched_df,markers_df=o1@misc$markers,GOcats=GOBP,goterms=goterms,numcats=10,org_db="org.Mm.eg.db")
-go_vis_o$plot
-
-write.csv(go_vis_y$GO_sem,"GO_y_table.csv")
-write.csv(go_vis_o$GO_sem,"GO_o_table.csv")
 
 
 
