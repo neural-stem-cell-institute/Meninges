@@ -249,7 +249,7 @@ x<-DotPlot(obj2,features=c("Negr1","Igfbp2","Ppp1r1a","Serpine2",
                           "Myh11","Pecam1","Abcc9","Ets1","Erg"),
            group.by="celltype")
 x+coord_flip()
-## success, cell ttypes fell out cleanly, adding to metadata 
+## success, cell types fell out cleanly, adding to metadata 
 z<-as.vector(y2$seurat_clusters)
 z<-replace(z,which(z=="0"),"Fibro1")
 z<-replace(z,which(z=="1"),"Endo1")
@@ -326,23 +326,65 @@ z<-intersect(obj@misc$group[obj@misc$group$p_val_adj<0.01,]$gene,
              obj@misc$celltype[obj@misc$celltype$p_val_adj<0.01,]$gene)
 
 res<-disease_enrichment(toupper(z))
-plot(res, class = "Enrichment", count =3,  cutoff= 0.01, nchars=50)
+y<-res@qresult
+y<-y[y$FDR<0.01,]
+x<-plot(res, class = "Enrichment", count =3,  cutoff= 0.01, nchars=50)
 
 ze<-obj@misc$celltype[obj@misc$celltype$p_val_adj<0.01,]
 ze<-intersect(z,ze[grep("Endo",ze$cluster),]$gene)
 res_e<-disease_enrichment(toupper(ze))
-plot(res_e, class = "Enrichment", count =3,  cutoff= 0.01, nchars=50)
-
+x1<-plot(res_e, class = "Enrichment", count =3,  cutoff= 0.01, nchars=50)
 zf<-obj@misc$celltype[obj@misc$celltype$p_val_adj<0.01,]
 zf<-intersect(z,zf[grep("Fibro",zf$cluster),]$gene)
 res_f<-disease_enrichment(toupper(zf))
-plot(res_f, class = "Enrichment", count =3,  cutoff= 0.01, nchars=50)
+x2<-plot(res_f, class = "Enrichment", count =3,  cutoff= 0.01, nchars=50)
+
+x4<-rbind(x$data,x1$data,x2$data)
+x4$group<-c(rep("all",dim(x$data)[1]),rep("endo",dim(x1$data)[1]),rep("fibro",dim(x2$data)[1]))
+
+p<-ggplot(x4,aes(x=gg,y=Description,color=FDR,size=Count))
+p<-p+geom_point()
+p<-p+theme_bw()
+p<-p+facet_grid(.~group)
+p<-p+ scale_color_gradient(low="red",high="blue")
+p
 
 ##gene ontology
 GOBP <- msigdb_gsets(species="Mus musculus", category="C5", subcategory="BP")
-eres<-enrich_test(markers_df=obj@misc$celltype,species_x="Mus musculus",genome_genes=42937)
-go_vis_sc<-GO_visualization(eres$Enriched_df,markers_df=obj@misc$markers,GOcats=GOBP,goterms=goterms,numcats=10,org_db="org.Mm.eg.db")
+x<-obj@misc$celltype
+x<-x[x$p_val_adj<0.05,]
+x<-x[,6:7]
+x<-foreach(i=1:length(unique(x$cluster))) %do% {
+  x[x$cluster==unique(x$cluster)[i],2]
+}
+names(x)<-unique(obj@misc$celltype$cluster)
+eres<-enrich_test(clust_list=x,species_x="Mus musculus",genome_genes=42937)
+go_vis_sc<-GO_visualization(eres$Enriched_df,clust_list=x,GOcats=GOBP,goterms=goterms,numcats=10,org_db="org.Mm.eg.db")
 go_vis_sc$plot
+
+y<-c("neurogenesis","tissue development","circulatory system development","cell morphogenesis","regulation of cell differentiation",
+     "programmed cell death","response to abiotic stimulus","regulation of transport","cell projection organization")
+test<-GO_viz_choose(go_vis_sc,clust_list=x,chosen_cats=y,goterms=goterms,species_x="Mus musculus")
+plot(test$plot)
+
+x<-obj@misc$group
+x<-x[x$p_val_adj<0.05,]
+x<-x[,6:7]
+x<-foreach(i=1:length(unique(x$cluster))) %do% {
+  x[x$cluster==unique(x$cluster)[i],2]
+}
+names(x)<-unique(obj@misc$group$cluster)
+
+
+eres2<-enrich_test(clust_list=x,species_x="Mus musculus",genome_genes=42937)
+go_vis_sc2<-GO_visualization(eres2$Enriched_df,clust_list=x,GOcats=GOBP,goterms=goterms,numcats=10,org_db="org.Mm.eg.db")
+go_vis_sc2$plot
+
+y<-c("neurogenesis","tissue development","aging","head development","cell morphogenesis",
+     "programmed cell death","response to abiotic stimulus","regulation of transport","cell projection organization")
+test<-GO_viz_choose(go_vis_sc2,clust_list=x,chosen_cats=y,goterms=goterms,species_x="Mus musculus")
+plot(test$plot)
+
 data(RP)
 RP<-RPprep(RP,"Mus")
 data(RPR)
@@ -350,11 +392,27 @@ RP_ready<-reactome_prep(eres$Enriched_df,RP=RP,RP_adj=RPR)
 react_vis<-reactome_visualization(RP_ready,RPR,RP=RP)
 react_vis$plot_object
 
-write.csv(go_vis_sc$GO_sem,"GO_table.csv")
-write.csv(RP_ready,"Reactome_table.csv")
+RP_ready2<-reactome_prep(eres2$Enriched_df,RP=RP,RP_adj=RPR)
+react_vis2<-reactome_visualization(RP_ready2,RPR,RP=RP)
+react_vis2$plot_object
 
+######writing tables
 
+write.csv(go_vis_sc$GO_sem,"celltype_GO_table.csv")
+write.csv(RP_ready,"celltype_Reactome_table.csv")
+write.csv(go_vis_sc2$GO_sem,"group_GO_table.csv")
+write.csv(RP_ready2,"group_Reactome_table.csv")
 
+x<-obj@misc$group
+y<-as.numeric(x$cluster)
+y<-replace(y,which(y==1),"Young_anterior")
+y<-replace(y,which(y==2),"old_anterior")
+y<-replace(y,which(y==3),"Young_posterior")
+y<-replace(y,which(y==4),"old_posterior")
+x$cluster<-y
+write.csv(x,"Age_position_markers.csv")
+write.csv(obj@misc$celltype,"Celltye_markers.csv")
+write.csv(x4,"Meninges_disease_enrichment.csv")
 
 
 
