@@ -1,12 +1,19 @@
 
 
-
-
+###Libraries utilized
+library(foreach)
+library(GO.db)
+library(biomaRt)
 library(Seurat)
 library(hypeR)
 library(screp)
 library(stringr)
 library(disgenet2r)
+library(ggplot2)
+library(babelgene)
+library(SummarizedExperiment)
+library(DESeq2)
+
 
 #### data was processed to a seurat object at end of mapping. Using those objects for metadata
 ######set up gene and go annotation objects
@@ -249,7 +256,11 @@ x<-DotPlot(obj2,features=c("Negr1","Igfbp2","Ppp1r1a","Serpine2",
                           "Myh11","Pecam1","Abcc9","Ets1","Erg"),
            group.by="celltype")
 x+coord_flip()
-## success, cell types fell out cleanly, adding to metadata 
+
+###young still has a strong division by position, however two classes of cell 
+###types appear to fall out now. Old is more mixed, but able to annotate cells in combined object
+###Since differences in postion are what we are trying to determine, I will map the cell types 
+###from the position regressed objects onto the non-regressed objects
 z<-as.vector(y2$seurat_clusters)
 z<-replace(z,which(z=="0"),"Fibro1")
 z<-replace(z,which(z=="1"),"Endo1")
@@ -291,18 +302,35 @@ DimPlot(obj,group.by="celltype",label=T)
 DimPlot(obj,group.by="position")
 DimPlot(obj,group.by="age")
 DimPlot(obj,label=T)
+
+####Use cell type annotations to identify markes/DEG
 obj<-SetIdent(obj,value="celltype")
 obj@misc$celltype<-FindAllMarkers(obj,only.pos=T)
 
-###OK cell types now assigned to each object and looks good 
-
+###Figure panels for paper (Figure 1)
 x<-DotPlot(obj,features=c("Negr1","Igfbp2","Ppp1r1a","Serpine2",
                           "Runx1t1","Epha5","Tjp1","Nfix","Meis2",
-                          "Col1a2","Dcn","Ebf1","Pdzd2",
+                          "Col1a2","Dcn",
                           "Nrp1","Rbpj","Angpt1","Runx1","Fbln5","Vegfc",
-                          "Myh11","Pecam1","Abcc9","Ets1","Erg"),
+                          "Pecam1","Abcc9","Ets1","Erg"),
            group.by="celltype")
+
 x+coord_flip()
+y1$celltype<-as.factor(y1$celltype)
+o1$celltype<-as.factor(o1$celltype)
+obj$celltype<-as.factor(obj$celltype)
+y1<-SetIdent(y1,value="celltype")
+o1<-SetIdent(o1,value="celltype")
+obj<-SetIdent(obj,value="celltype")
+DimPlot(y1,label=T,pt.size=1.5)
+DimPlot(o1,label=T,pt.size=1.5)
+DimPlot(obj,label=T,pt.size=1.5)
+DimPlot(y1,label=T,pt.size=1.5,split.by="position")
+DimPlot(o1,label=T,pt.size=1.5,split.by="position")
+DimPlot(obj,label=T,pt.size=1.5,split.by="position")
+DimPlot(y1,label=T,pt.size=1.5,group.by="position")
+DimPlot(o1,label=T,pt.size=1.5,group.by="position")
+DimPlot(obj,label=T,pt.size=1.5,group.by="position")
 ###set up new metadata making groups of age and position
 ###1=YA,2=OA,3=YP,4=OP
 x<-obj@meta.data$age
@@ -321,7 +349,7 @@ obj<-SetIdent(obj,value="group")
 obj@misc$group<-FindAllMarkers(obj,only.pos=T)
 
 #####enrichment testing
-###disease
+##disease enrichment using celltype and group markers
 z<-intersect(obj@misc$group[obj@misc$group$p_val_adj<0.01,]$gene,
              obj@misc$celltype[obj@misc$celltype$p_val_adj<0.01,]$gene)
 
@@ -339,6 +367,19 @@ zf<-intersect(z,zf[grep("Fibro",zf$cluster),]$gene)
 res_f<-disease_enrichment(toupper(zf))
 x2<-plot(res_f, class = "Enrichment", count =3,  cutoff= 0.01, nchars=50)
 
+###make supplementary table
+b<-res@qresult
+b2<-res_e@qresult
+b3<-res_f@qresult
+b<-b[b$FDR<0.01,]
+b2<-b2[b2$FDR<0.01,]
+b3<-b3[b3$FDR<0.01,]
+b$group<-"all"
+b2$group<-"endo"
+b3$group<-"fibro"
+write.csv(rbind(b,b1,b3),"Disease_Enrichment.csv")
+
+###Make panel for Figure 2
 x4<-rbind(x$data,x1$data,x2$data)
 x4$group<-c(rep("all",dim(x$data)[1]),rep("endo",dim(x1$data)[1]),rep("fibro",dim(x2$data)[1]))
 
@@ -349,7 +390,8 @@ p<-p+facet_grid(.~group)
 p<-p+ scale_color_gradient(low="red",high="blue")
 p
 
-##gene ontology
+####GO enrichment of groups and cell types
+## by cell type 
 GOBP <- msigdb_gsets(species="Mus musculus", category="C5", subcategory="BP")
 x<-obj@misc$celltype
 x<-x[x$p_val_adj<0.05,]
@@ -362,11 +404,13 @@ eres<-enrich_test(clust_list=x,species_x="Mus musculus",genome_genes=42937)
 go_vis_sc<-GO_visualization(eres$Enriched_df,clust_list=x,GOcats=GOBP,goterms=goterms,numcats=10,org_db="org.Mm.eg.db")
 go_vis_sc$plot
 
+##plot panel for figure 2
 y<-c("neurogenesis","tissue development","circulatory system development","cell morphogenesis","regulation of cell differentiation",
      "programmed cell death","response to abiotic stimulus","regulation of transport","cell projection organization")
 test<-GO_viz_choose(go_vis_sc,clust_list=x,chosen_cats=y,goterms=goterms,species_x="Mus musculus")
 plot(test$plot)
 
+##by group
 x<-obj@misc$group
 x<-x[x$p_val_adj<0.05,]
 x<-x[,6:7]
@@ -380,28 +424,16 @@ eres2<-enrich_test(clust_list=x,species_x="Mus musculus",genome_genes=42937)
 go_vis_sc2<-GO_visualization(eres2$Enriched_df,clust_list=x,GOcats=GOBP,goterms=goterms,numcats=10,org_db="org.Mm.eg.db")
 go_vis_sc2$plot
 
+##plot panel for figure 2
 y<-c("neurogenesis","tissue development","aging","head development","cell morphogenesis",
      "programmed cell death","response to abiotic stimulus","regulation of transport","cell projection organization")
 test<-GO_viz_choose(go_vis_sc2,clust_list=x,chosen_cats=y,goterms=goterms,species_x="Mus musculus")
 plot(test$plot)
 
-data(RP)
-RP<-RPprep(RP,"Mus")
-data(RPR)
-RP_ready<-reactome_prep(eres$Enriched_df,RP=RP,RP_adj=RPR)
-react_vis<-reactome_visualization(RP_ready,RPR,RP=RP)
-react_vis$plot_object
-
-RP_ready2<-reactome_prep(eres2$Enriched_df,RP=RP,RP_adj=RPR)
-react_vis2<-reactome_visualization(RP_ready2,RPR,RP=RP)
-react_vis2$plot_object
-
-######writing tables
-
+###write tables for supplement
 write.csv(go_vis_sc$GO_sem,"celltype_GO_table.csv")
-write.csv(RP_ready,"celltype_Reactome_table.csv")
 write.csv(go_vis_sc2$GO_sem,"group_GO_table.csv")
-write.csv(RP_ready2,"group_Reactome_table.csv")
+
 
 x<-obj@misc$group
 y<-as.numeric(x$cluster)
@@ -412,7 +444,237 @@ y<-replace(y,which(y==4),"old_posterior")
 x$cluster<-y
 write.csv(x,"Age_position_markers.csv")
 write.csv(obj@misc$celltype,"Celltye_markers.csv")
-write.csv(x4,"Meninges_disease_enrichment.csv")
+
+###obtain Schizophrenia data from BrainSeq phase II
+###https://eqtl.brainseq.org/phase2/
+###downloaded RangedSummarizedExperiment obj : Gene along includes counts and metadata
+###selcted data from dorsolateral prefrontal cortex (DLPFC)
+
+schizo_cts<-assays(rse_gene)$counts
+schizo_cts<-schizo_cts[,rownames(schizo_meta[schizo_meta$Region=="DLPFC",])]
+
+schizo_meta<-colData(rse_gene)
+schizo_meta<-schizo_meta[,30:54]
+schizo_meta$Dx<-as.factor(schizo_meta$Dx)
+schizo_meta<-schizo_meta[schizo_meta$Region=="DLPFC",]
+
+###due to number of samples for control and schizo conditions chose to divide sample by sex 
+###and test by wilcox rank test due to results from PMID:35292087
+###first normalized counts via DESeq2 median of ratios method, got rid of low count genes, and 
+###categorized samples by sex and condition into a design vector
+schizo<-DESeqDataSetFromMatrix(schizo_cts,
+                               colData=schizo_meta,
+                               design=~Sex + Dx)
+schizo<-schizo[rowSums(counts(schizo)>20)>=45,]
+schizo <- estimateSizeFactors(schizo)
+norm_schizo <- counts(schizo, normalized=TRUE)
+design<-data.frame(sex=schizo_meta$Sex,Dx=as.character(schizo_meta$Dx))
+design[design=="M"]<-0
+design[design=="F"]<-1
+design[design=="Control"]<-1
+design[design=="Schizo"]<-3
+design<-as.numeric(design$sex)+as.numeric(design$Dx)
+###1=M_ctrl,2=F_ctrl,3=M_schizo,4=F_schizo
+###use a wilcox-rank test to find differential genes for condition comparison within each sex
+testF<-cbind(norm_schizo[,design==2],norm_schizo[,design==4])
+designF<-c(rep(0,length(which(design==2))),rep(1,length(which(design==4))))
+
+pvalsF <- sapply(1:nrow(testF),function(i){
+  data<-cbind.data.frame(gene=as.numeric(testF[i,]),designF)
+  p=wilcox.test(gene~designF, data)$p.value
+  return(p)
+})
+
+testM<-cbind(norm_schizo[,design==1],norm_schizo[,design==3])
+designM<-c(rep(0,length(which(design==1))),rep(1,length(which(design==3))))
+
+pvalsM <- sapply(1:nrow(testM),function(i){
+  data<-cbind.data.frame(gene=as.numeric(testM[i,]),designM)
+  p=wilcox.test(gene~designM, data)$p.value
+  return(p)
+})
+### clean up rownames of each counts matrix
+x<-(unlist(strsplit(rownames(testF),"\\."))[seq(1,2*length(rownames(testF)),2)])
+rownames(testF)<-x
+
+x<-(unlist(strsplit(rownames(testM),"\\."))[seq(1,2*length(rownames(testF)),2)])
+rownames(testM)<-x
+
+### make data frames for each sex and select significant genes
+### with a absolute logFC 0.5 threshold
+
+resF<-data.frame(pvalues=pvalsF,
+                 adj_p=p.adjust(pvalsF,"fdr"))
+rownames(resF)<-rownames(testF)
+resM<-data.frame(pvalues=pvalsM,
+                 adj_p=p.adjust(pvalsM,"fdr"))
+rownames(resM)<-rownames(testM)
+
+resF$logFC<-log2(apply(testF[,designF==1],1,mean)/apply(testF[,designF==0],1,mean))
+resF$baseMean<-apply(testF,1,mean)
+resF.sig<-resF[resF$adj_p<0.05,]
+resF.sig<-resF.sig[which(abs(resF.sig$logFC)>0.5),]
+
+resM$logFC<-log2(apply(testM[,designM==1],1,mean)/apply(testM[,designM==0],1,mean))
+resM$baseMean<-apply(testM,1,mean)
+resM.sig<-resM[resM$adj_p<0.05,]
+resM.sig<-resM.sig[which(abs(resM.sig$logFC)>0.5),]
+
+length(intersect(rownames(resF.sig),rownames(resM.sig)))
+##Females have 1532 significant genes and males have 401 with 342 shared
+## add column with mouse orthologs
+x<- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id","hgnc_symbol"),
+          values=rownames(resM.sig),mart= mart)
+x<-orthologs(rownames(resM.sig),species="mouse")
+y<-x$symbol
+names(y)<-x$human_ensembl
+resM.sig$mus_gene<-NA
+resM.sig[names(y),]$mus_gene<-y
+
+x<- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id","hgnc_symbol"),
+          values=rownames(resF.sig),mart= mart)
+x<-orthologs(rownames(resF.sig),species="mouse")
+y<-x$symbol
+names(y)<-x$human_ensembl
+resF.sig$mus_gene<-NA
+resF.sig[names(y),]$mus_gene<-y
+
+### use Schizo data to look for ligands from meninges to receptors in brain
+##function for identifying ligand receptor pairs
+
+partner<-function(y,targets,LR_db,ligand=TRUE) {
+  if(isTRUE(ligand)){
+    z<-foreach(i=1:length(y),.combine='rbind') %do% {
+      z1<-LR_db[which(LR_db$ligand_gene_symbol==y[i]),]
+      z1[,2:3]
+    }
+    z2<-intersect(targets,z[,2])
+    z2<-data.frame(z2)
+    colnames(z2)<-colnames(z)[2]
+    z2<-dplyr::right_join(z,z2)
+    z2<-z2[!(is.na(z2$ligand_gene_symbol)),]
+    return(z2)} else{
+      z<-foreach(i=1:length(y),.combine='rbind') %do% {
+        z1<-LR_db[which(LR_db$receptor_gene_symbol==y[i]),]
+        z1[,2:3]
+      }
+      z2<-intersect(targets,z[,1])
+      z2<-data.frame(z2)
+      colnames(z2)<-colnames(z)[1]
+      z2<-dplyr::right_join(z,z2)
+      z2<-z2[!(is.na(z2$receptor_gene_symbol)),]
+      return(z2)
+    }
+  
+}
+
+###downloaded Ligand-Receptod data from http://tcm.zju.edu.cn/celltalkdb/download.php
+humLR<-read.delim("human_lr_pair.txt")
+musLR<-read.delim("mouse_lr_pair.txt")
+
+x<-unique(obj@misc$group$gene)
+y<-intersect(x,musLR$ligand_gene_symbol)
+
+###against schizo DEG
+z<-unique(resF.sig$mus_gene)
+z<-z[-(which(is.na(z)))]
+LRF_sig<-partner(y,z,LR_db=musLR)
+
+z<-unique(resM.sig$mus_gene)
+z<-z[-(which(is.na(z)))]
+LRM_sig<-partner(y,z,LR_db=musLR)
+
+###against all reasonably expressed receptors in brain data
+
+
+z<-orthologs(rownames(resF[resF$baseMean>15,]),species="mouse")
+z<-unique(z$symbol)
+LRF<-partner(y,z,LR_db=musLR)
+
+z<-orthologs(rownames(resM[resM$baseMean>15,]),species="mouse")
+z<-unique(z$symbol)
+LRM<-partner(y,z,LR_db=musLR)
+
+#### function to help identify cell type, region, and age associated with ligand 
+
+
+
+anno_group<-function(obj_reg,obj_ct,LR_group){
+  m<-as.character(obj_reg$cluster)
+  names(m)<-obj_reg$gene
+  reg_age<-m[intersect(obj_reg$gene,LR_group$ligand_gene_symbol)]
+  reg_age<-replace(reg_age,which(reg_age==1),"Young_anterior")
+  reg_age<-replace(reg_age,which(reg_age==2),"old_anterior")
+  reg_age<-replace(reg_age,which(reg_age==3),"Young_posterior")
+  reg_age<-replace(reg_age,which(reg_age==4),"old_posterior")
+  
+  m<-as.character(obj_ct$cluster)
+  names(m)<-obj_ct$gene
+  celltype<-m[intersect(obj_ct$gene,LR_group$ligand_gene_symbol)]
+  
+  z<-setdiff(names(reg_age),names(celltype))
+  z1<-setdiff(names(celltype),names(reg_age))
+  if(length(z)==0) {} else {
+    b<-rep(NA,length(z))
+    names(b)<-z
+  }
+  
+  if(length(z1)==0) {} else {
+    b1<-rep(NA,length(z1))
+    names(b1)<-z1
+  }
+  z3<-intersect(names(reg_age),names(celltype))
+  df1<-data.frame(reg_age[z3],celltype[z3])
+  colnames(df1)<-c("age_reg","celltype")
+  
+  if(length(z)==0) {} else{
+    z<-reg_age[z]
+    df2<-data.frame(z,b)
+    colnames(df2)<-c("age_reg","celltype")
+    df1<-rbind(df1,df2)
+  }
+  
+  if(length(z1)==0) {} else{
+    z1<-celltype[z1]
+    df2<-data.frame(z1,b1)
+    colnames(df2)<-c("age_reg","celltype")
+    df1<-rbind(df1,df2)
+  }
+  df1$gene<-rownames(df1)
+  return(df1)
+ }
+
+### looking at each condition
+
+
+LRFsig_anno<-anno_group(obj@misc$group,obj@misc$celltype,LRF_sig)
+LRF_anno<-anno_group(obj@misc$group,obj@misc$celltype,LRF)
+LRMsig_anno<-anno_group(obj@misc$group,obj@misc$celltype,LRM_sig)
+LRM_anno<-anno_group(obj@misc$group,obj@misc$celltype,LRM)
+
+df1<-semi_join(LRFsig_anno,LRF_anno,by="gene")
+df2<-anti_join(LRFsig_anno,LRF_anno,by="gene")
+df1<-rbind(df1,df2)
+df1$Schizo_Sig<-TRUE
+df2<-anti_join(LRF_anno,LRFsig_anno,by="gene")
+df2$Schizo_Sig<-FALSE
+df1<-rbind(df1,df2)
+df1$Sex<-"Female"
+LRF_anno<-df1
+
+df1<-semi_join(LRMsig_anno,LRF_anno,by="gene")
+df2<-anti_join(LRMsig_anno,LRF_anno,by="gene")
+df1<-rbind(df1,df2)
+df1$Schizo_Sig<-TRUE
+df2<-anti_join(LRM_anno,LRMsig_anno,by="gene")
+df2$Schizo_Sig<-FALSE
+df1<-rbind(df1,df2)
+df1$Sex<-"Male"
+LRM_anno<-df1
+
+write.csv(rbind(LRF_anno,LRM_anno),"LR_schizo_all.csv")
+
+
 
 
 
