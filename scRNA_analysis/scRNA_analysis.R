@@ -5,17 +5,22 @@ library(foreach)
 library(GO.db)
 library(biomaRt)
 library(Seurat)
-library(hypeR)
-library(screp)
-library(stringr)
 library(disgenet2r)
+library(screp)
+library(dplyr)
+library(stringr)
+library(GOfuncR)
+
+library(hypeR)
+library(polycor)
+library(rcompanion)
 library(ggplot2)
 library(babelgene)
 library(SummarizedExperiment)
 library(DESeq2)
+library(RCy3)
 
-
-#### data was processed to a seurat object at end of mapping. Using those objects for metadata
+#### data was processed to a seurat object at end of mapping with STAR mapper. Using those objects for metadata
 ######set up gene and go annotation objects
 mart <- useDataset("mmusculus_gene_ensembl", useMart("ensembl"))
 x<-rownames(young.combined@assays$RNA@counts)
@@ -131,17 +136,18 @@ y1<-subset(y0,subset=nCount_RNA>30000)
 o1<-subset(ol0,subset=nCount_RNA>30000)
 FeatureScatter(y1,feature1="nCount_RNA",feature2="nFeature_RNA",group.by = "position")
 FeatureScatter(o1,feature1="nCount_RNA",feature2="nFeature_RNA",group.by = "position")
-#####young 
-y1<-SCTransform(y1,vars.to.regress=c("S.Score", "G2M.Score"))
+#####young analysis 
+y1<-SCTransform(y1,vars.to.regress=c("S.Score", "G2M.Score","sample"))
 y1<-RunPCA(y1)
 ElbowPlot(y1)
 y1<-RunUMAP(y1,dims=1:10)
 y1<-FindNeighbors(y1,dims=1:10)
-y1<-FindClusters(y1,resolution = 0.8)
+y1<-FindClusters(y1,resolution = 0.5)
 DimPlot(y1,label=T)
+DimPlot(y1,group.by="position",label=T)
 DimPlot(y1,split.by="position",label=T)
 
-VlnPlot(y1,c("Ptprc","Pecam1"))
+
 
 # old
 
@@ -153,14 +159,13 @@ o1<-FindNeighbors(o1,dims=1:10)
 o1<-FindClusters(o1,resolution = 0.8)
 DimPlot(o1,label=T)
 DimPlot(o1,group.by="position")
-
+DimPlot(o1,split.by="position",label=T)
 
 o1@misc$markers<-FindAllMarkers(o1,only.pos=T)
 y1@misc$markers<-FindAllMarkers(y1,only.pos=T)
 
 o1@misc$markers<-o1@misc$markers[o1@misc$markers$p_val_adj<0.1,]
 y1@misc$markers<-y1@misc$markers[y1@misc$markers$p_val_adj<0.1,]
-
 ########integrate ages
 z<-list(o1,y1)
 z1<-SelectIntegrationFeatures(object.list=z,nfeatures=3000)
@@ -171,148 +176,107 @@ obj<-IntegrateData(anchorset=za,normalization.method = "SCT")
 
 obj<-RunPCA(obj)
 ElbowPlot(obj)
-obj<-RunUMAP(obj,dims=1:5)
-obj<-FindNeighbors(obj,dims=1:5)
+obj<-RunUMAP(obj,dims=1:10)
+obj<-FindNeighbors(obj,dims=1:10)
 obj<-FindClusters(obj,resolution = 0.5)
+DimPlot(obj,label=T)
+DimPlot(obj,group.by="position")
+DimPlot(obj,split.by="age",label=T)
+DimPlot(obj,split.by="position",label=T)
+
 DefaultAssay(obj)<-"SCT"
 obj<-PrepSCTFindMarkers(obj)
-obj@misc$markers<-FindAllMarkers(obj,only.pos=T)
-obj@misc$markers<-obj@misc$markers[obj@misc$markers$p_val_adj<0.1,]
-obj@misc$markers<-FindAllMarkers(obj,only.pos=T)
 
-
-###position is a main contributor to variance makes identifying cells a bit hard, decided to regress 
-###position out, identify cells and then map onto the object without position regression 
-### Reference datasets for cell annotation not based on single nuclear RNA-seq, so sought genes to help identify cell types
-###genes used for annotation of cell types
+##Using the following markers for annotation
 ##Negr1, Dcn, Igfbp2  higher in Fibroblasts over endothelial
-## Pdzd2, Myh11 higher in endo/SMC over fibro
-##markers PMID: 33343397
+## Pdzd2 higher in endo over fibro
+## Myh11 higher in SMC
+##endo markers PMID: 33343397
 ##pericytes ebf1 PMID:34272603; Rpbj PMID: 31249304
 ###Fibroblasts
 ## PMID: 25013174; PMID: 32403949
-#total of 13 endothelial markers and 
-y2<-subset(y0,subset=nCount_RNA>30000)
-o2<-subset(ol0,subset=nCount_RNA>30000)
 
-##young
-y2<-SCTransform(y2,vars.to.regress=c("S.Score", "G2M.Score","position"))
-y2<-RunPCA(y2)
-ElbowPlot(y2)
-y2<-RunUMAP(y2,dims=1:10)
-y2<-FindNeighbors(y2,dims=1:10)
-y2<-FindClusters(y2,resolution = 0.8)
-DimPlot(y2,label=T)
-
-x<-DotPlot(y2,features=c("Negr1","Igfbp2","Ppp1r1a","Serpine2",
-                          "Runx1t1","Epha5","Tjp1","Nfix","Meis2",
-                          "Col1a2","Dcn","Ebf1","Pdzd2",
-                          "Nrp1","Rbpj","Angpt1","Runx1","Fbln5","Vegfc",
-                          "Myh11","Pecam1","Abcc9","Ets1","Erg"),
-           group.by="celltype")
+x<-DotPlot(o1,features=c("Negr1","Igfbp2","Ppp1r1a","Serpine2",
+                          "Runx1t1","Epha5","Cxadr","Tjp1","Nfix","Meis2",
+                          "Aldh1a3",
+                          "Col1a2","Dcn","Pdgfra",
+                          "Pecam1","Ets1","Erg","Flt1",
+                          "Angpt1","Anpep","Rbpj","Ebf1","Runx1",
+                          "Abcc9",
+                          "Nrp1",
+                          "Efnb2","Fbln5","Vegfc"))
 
 x+coord_flip()
-## cell type is main factor in driving the cells apart in UMAP now, however position still pretty strong driver.
 
-# old
+x<-DotPlot(y1,features=c("Negr1","Igfbp2","Ppp1r1a","Serpine2",
+                          "Runx1t1","Epha5","Cxadr","Tjp1","Nfix","Meis2",
+                          "Aldh1a3",
+                          "Col1a2","Dcn","Pdgfra",
+                          "Pecam1","Ets1","Erg","Flt1",
+                          "Angpt1","Anpep","Rbpj","Ebf1","Runx1",
+                          "Abcc9",
+                          "Nrp1",
+                          "Efnb2","Fbln5","Vegfc"))
 
-o2<-SCTransform(o2,vars.to.regress=c("S.Score", "G2M.Score","position"))
-o2<-RunPCA(o2)
-ElbowPlot(o2)
-o2<-RunUMAP(o2,dims=1:20)
-o2<-FindNeighbors(o2,dims=1:10)
-o2<-FindClusters(o2,resolution = 0.8)
-DimPlot(o2,label=T)
-
-x<-DotPlot(o2,features=c("Negr1","Igfbp2","Ppp1r1a","Serpine2",
-                          "Runx1t1","Epha5","Tjp1","Nfix","Meis2",
-                          "Col1a2","Dcn","Ebf1","Pdzd2",
-                          "Nrp1","Rbpj","Angpt1","Runx1","Fbln5","Vegfc",
-                          "Myh11","Pecam1","Abcc9","Ets1","Erg"),
-           group.by="celltype")
 x+coord_flip()
 
-## Old cells are more muddled than young cells not clean seperation like in young
-## hopefully the young cells will act as anchors during the integration
-########integrate ages
-z<-list(o2,y2)
-z1<-SelectIntegrationFeatures(object.list=z,nfeatures=3000)
-z<-PrepSCTIntegration(object.list=z,anchor.features=z1)
-za<-FindIntegrationAnchors(object.list=z,normalization.method = "SCT",
-                           anchor.features = z1,reduction="cca",k.anchor=30)
-obj2<-IntegrateData(anchorset=za,normalization.method = "SCT")
+x<-DotPlot(obj,features=c("Negr1","Igfbp2","Ppp1r1a","Serpine2",
+                          "Runx1t1","Epha5","Cxadr","Tjp1","Nfix","Meis2",
+                          "Aldh1a3",
+                          "Col1a2","Dcn","Pdgfra",
+                          "Pecam1","Ets1","Erg","Flt1",
+                          "Angpt1","Anpep","Rbpj","Ebf1","Runx1",
+                          "Abcc9",
+                          "Nrp1",
+                          "Efnb2","Fbln5","Vegfc"),assay="SCT")
 
-obj2<-RunPCA(obj2)
-ElbowPlot(obj2)
-obj2<-RunUMAP(obj2,dims=1:10)
-obj2<-FindNeighbors(obj2,dims=1:10)
-obj2<-FindClusters(obj2,resolution = 0.5)
-DimPlot(obj2,label=T)
-
-x<-DotPlot(obj2,features=c("Negr1","Igfbp2","Ppp1r1a","Serpine2",
-                          "Runx1t1","Epha5","Tjp1","Nfix","Meis2",
-                          "Col1a2","Dcn","Ebf1","Pdzd2",
-                          "Nrp1","Rbpj","Angpt1","Runx1","Fbln5","Vegfc",
-                          "Myh11","Pecam1","Abcc9","Ets1","Erg"),
-           group.by="celltype")
 x+coord_flip()
 
-###young still has a strong division by position, however two classes of cell 
-###types appear to fall out now. Old is more mixed, but able to annotate cells in combined object
-###Since differences in postion are what we are trying to determine, I will map the cell types 
-###from the position regressed objects onto the non-regressed objects
-z<-as.vector(y2$seurat_clusters)
+
+
+###young has  two classes of cells types fall out with a strong division by position
+###Old is more mixed, but able to annotate cells in combined object
+
+z<-as.vector(y1$seurat_clusters)
 z<-replace(z,which(z=="0"),"Fibro1")
-z<-replace(z,which(z=="1"),"Endo1")
-z<-replace(z,which(z=="2"),"Endo2")
-z<-replace(z,which(z=="3"),"Fibro2")
+z<-replace(z,which(z=="1"),"Fibro2")
+z<-replace(z,which(z=="2"),"Endo1")
+z<-replace(z,which(z=="3"),"Endo2")
 z<-replace(z,which(z=="4"),"Endo3")
 z<-replace(z,which(z=="5"),"Fibro3")
-names(z)<-rownames(y2@meta.data)
-y2$celltype<-z
-names(z)<-rownames(y2@meta.data)
+z<-replace(z,which(z=="6"),"Fibro4")
 y1$celltype<-z
 
-z<-as.vector(o2$seurat_clusters)
-z<-replace(z,which(z=="0"),"Fibro1")
-z<-replace(z,which(z=="1"),"Endo1")
-z<-replace(z,which(z=="2"),"Endo2")
-z<-replace(z,which(z=="3"),"Fibro2")
-z<-replace(z,which(z=="4"),"Endo3")
-z<-replace(z,which(z=="5"),"Fibro3")
-o2$celltype<-z
-names(z)<-rownames(o2@meta.data)
-o1$celltype<-z
 
-z<-as.vector(obj2$seurat_clusters)
+z<-as.vector(o1$seurat_clusters)
 z<-replace(z,which(z=="0"),"Fibro1")
 z<-replace(z,which(z=="1"),"Endo1")
 z<-replace(z,which(z=="2"),"Endo2")
 z<-replace(z,which(z=="3"),"Fibro2")
 z<-replace(z,which(z=="4"),"Fibro3")
-z<-replace(z,which(z=="5"),"Fibro4")
-z<-replace(z,which(z=="6"),"Endo3")
+o1$celltype<-z
+
+z<-as.vector(obj$seurat_clusters)
+z<-replace(z,which(z=="0"),"Fibro1")
+z<-replace(z,which(z=="1"),"Fibro2")
+z<-replace(z,which(z=="2"),"Endo1")
+z<-replace(z,which(z=="3"),"Endo2")
+z<-replace(z,which(z=="4"),"Endo3")
+z<-replace(z,which(z=="5"),"Fibro3")
+z<-replace(z,which(z=="6"),"Fibro4")
 z<-replace(z,which(z=="7"),"Fibro5")
-obj2$celltype<-z
-names(z)<-rownames(obj2@meta.data)
 obj$celltype<-z
 
-DimPlot(obj,group.by="celltype",label=T,split.by="position")
-DimPlot(obj,group.by="celltype",label=T)
-DimPlot(obj,group.by="position")
-DimPlot(obj,group.by="age")
-DimPlot(obj,label=T)
-
-####Use cell type annotations to identify markes/DEG
-obj<-SetIdent(obj,value="celltype")
+###cell type based markers
 obj@misc$celltype<-FindAllMarkers(obj,only.pos=T)
+obj@misc$celltype<-obj@misc$celltype[obj@misc$celltype$p_val_adj<0.1,]
 
 ###Figure panels for paper (Figure 1)
-x<-DotPlot(obj,features=c("Negr1","Igfbp2","Ppp1r1a","Serpine2",
-                          "Runx1t1","Epha5","Tjp1","Nfix","Meis2",
-                          "Col1a2","Dcn",
-                          "Nrp1","Rbpj","Angpt1","Runx1","Fbln5","Vegfc",
-                          "Pecam1","Abcc9","Ets1","Erg"),
+x<-DotPlot(obj,features=c("Ppp1r1a","Serpine2",
+                          "Tjp1","Nfix","Meis2",
+                          "Col1a2","Dcn","Ebf1","Pdzd2",
+                         "Runx1","Fbln5","Vegfc","Myh11",
+                          "Pecam1","Ets1","Erg"),
            group.by="celltype")
 
 x+coord_flip()
@@ -322,6 +286,7 @@ obj$celltype<-as.factor(obj$celltype)
 y1<-SetIdent(y1,value="celltype")
 o1<-SetIdent(o1,value="celltype")
 obj<-SetIdent(obj,value="celltype")
+pdf("Figure_1_plots.pdf")
 DimPlot(y1,label=T,pt.size=1.5)
 DimPlot(o1,label=T,pt.size=1.5)
 DimPlot(obj,label=T,pt.size=1.5)
@@ -331,8 +296,39 @@ DimPlot(obj,label=T,pt.size=1.5,split.by="position")
 DimPlot(y1,label=T,pt.size=1.5,group.by="position")
 DimPlot(o1,label=T,pt.size=1.5,group.by="position")
 DimPlot(obj,label=T,pt.size=1.5,group.by="position")
+DimPlot(obj,label=T,pt.size=1.5,split.by="age")
+DimPlot(obj,label=T,pt.size=1.5,group.by="age")
+dev.off()
+
+###for Figure 1J
+
+x<-DotPlot(obj,features=c("Ppp1r1a","Serpine2",
+                          "Tjp1","Nfix","Meis2",
+                          "Col1a2","Dcn",
+                          "Ebf1","Runx1","Fbln5",
+                          "Vegfc",
+                          "Pecam1","Ets1","Erg","Myh11",
+                          "Angpt1"),assay="SCT")
+
+x+coord_flip()
+pdf("Celltype_dotplot.pdf")
+x
+x+coord_flip()
+dev.off()
+###get numbers for cell type pie charts for Figure 1
+
+x<-obj@meta.data
+
+y<-rbind(table(x[x$group==1,]$celltype),
+         table(x[x$group==2,]$celltype),
+         table(x[x$group==3,]$celltype),
+         table(x[x$group==4,]$celltype))
+rownames(y)<-c("YA","OA","YP","OP")
+write.csv(y,"CellType_age_position.csv")
+
 ###set up new metadata making groups of age and position
 ###1=YA,2=OA,3=YP,4=OP
+### find markers for each group
 x<-obj@meta.data$age
 x<-replace(x,which(x=="young"),0)
 x<-replace(x,which(x=="old"),1)
@@ -347,27 +343,34 @@ z<-x+z
 obj@meta.data$group<-z
 obj<-SetIdent(obj,value="group")
 obj@misc$group<-FindAllMarkers(obj,only.pos=T)
+obj@misc$group<-obj@misc$group[obj@misc$group$p_val_adj<0.1,]
 
-#####enrichment testing
 ##disease enrichment using celltype and group markers
 z<-intersect(obj@misc$group[obj@misc$group$p_val_adj<0.01,]$gene,
              obj@misc$celltype[obj@misc$celltype$p_val_adj<0.01,]$gene)
+z<-orthologs(z,species="mouse",human=F)$human_symbol
 
-res<-disease_enrichment(toupper(z))
+
+
+disgenet_api_key <- get_disgenet_api_key(email="youremail",password="yourpassword")
+Sys.setenv(DISGENET_API_KEY= disgenet_api_key)
+
+res<-disease_enrichment(z)
 y<-res@qresult
 y<-y[y$FDR<0.01,]
 x<-plot(res, class = "Enrichment", count =3,  cutoff= 0.01, nchars=50)
 
 ze<-obj@misc$celltype[obj@misc$celltype$p_val_adj<0.01,]
-ze<-intersect(z,ze[grep("Endo",ze$cluster),]$gene)
-res_e<-disease_enrichment(toupper(ze))
+ze<-intersect(z,orthologs(ze[grep("Endo",ze$cluster),]$gene,species="mouse",human=F)$human_symbol)
+res_e<-disease_enrichment(ze)
 x1<-plot(res_e, class = "Enrichment", count =3,  cutoff= 0.01, nchars=50)
 zf<-obj@misc$celltype[obj@misc$celltype$p_val_adj<0.01,]
-zf<-intersect(z,zf[grep("Fibro",zf$cluster),]$gene)
-res_f<-disease_enrichment(toupper(zf))
+zf<-intersect(z,orthologs(zf[grep("Fibro",zf$cluster),]$gene,species="mouse",human=F)$human_symbol)
+res_f<-disease_enrichment(zf)
 x2<-plot(res_f, class = "Enrichment", count =3,  cutoff= 0.01, nchars=50)
 
-###make supplementary table
+
+###make supplementary tables
 b<-res@qresult
 b2<-res_e@qresult
 b3<-res_f@qresult
@@ -377,36 +380,43 @@ b3<-b3[b3$FDR<0.01,]
 b$group<-"all"
 b2$group<-"endo"
 b3$group<-"fibro"
-write.csv(rbind(b,b1,b3),"Disease_Enrichment.csv")
+write.csv(rbind(b,b2,b3),"Disease_Enrichment.csv")
+
+write.csv(obj@misc$celltype,"Celltype_markers.csv")
+write.csv(obj@misc$group,"Group_markers.csv")
 
 ###Make panel for Figure 2
 x4<-rbind(x$data,x1$data,x2$data)
 x4$group<-c(rep("all",dim(x$data)[1]),rep("endo",dim(x1$data)[1]),rep("fibro",dim(x2$data)[1]))
+x5<-x4[x4$gg>0.01,]
 
-p<-ggplot(x4,aes(x=gg,y=Description,color=FDR,size=Count))
+p<-ggplot(x5,aes(x=gg,y=Description,color=FDR,size=Count))
 p<-p+geom_point()
 p<-p+theme_bw()
 p<-p+facet_grid(.~group)
 p<-p+ scale_color_gradient(low="red",high="blue")
-p
 
+pdf("disease_panel.pdf")
+p
+dev.off()
 ####GO enrichment of groups and cell types
 ## by cell type 
 GOBP <- msigdb_gsets(species="Mus musculus", category="C5", subcategory="BP")
 x<-obj@misc$celltype
 x<-x[x$p_val_adj<0.05,]
 x<-x[,6:7]
+y<-unique(x$cluster)
 x<-foreach(i=1:length(unique(x$cluster))) %do% {
   x[x$cluster==unique(x$cluster)[i],2]
 }
-names(x)<-unique(obj@misc$celltype$cluster)
+names(x)<-y
 eres<-enrich_test(clust_list=x,species_x="Mus musculus",genome_genes=42937)
 go_vis_sc<-GO_visualization(eres$Enriched_df,clust_list=x,GOcats=GOBP,goterms=goterms,numcats=10,org_db="org.Mm.eg.db")
 go_vis_sc$plot
 
 ##plot panel for figure 2
-y<-c("neurogenesis","tissue development","circulatory system development","cell morphogenesis","regulation of cell differentiation",
-     "programmed cell death","response to abiotic stimulus","regulation of transport","cell projection organization")
+y<-c("neurogenesis","tissue development","aging","cell morphogenesis","regulation of cell differentiation",
+     "programmed cell death","response to abiotic stimulus","regulation of transport","cell projection organization","cytokine production")
 test<-GO_viz_choose(go_vis_sc,clust_list=x,chosen_cats=y,goterms=goterms,species_x="Mus musculus")
 plot(test$plot)
 
@@ -414,36 +424,30 @@ plot(test$plot)
 x<-obj@misc$group
 x<-x[x$p_val_adj<0.05,]
 x<-x[,6:7]
+y<-unique(x$cluster)
 x<-foreach(i=1:length(unique(x$cluster))) %do% {
   x[x$cluster==unique(x$cluster)[i],2]
 }
-names(x)<-unique(obj@misc$group$cluster)
-
+names(x)<-y
 
 eres2<-enrich_test(clust_list=x,species_x="Mus musculus",genome_genes=42937)
 go_vis_sc2<-GO_visualization(eres2$Enriched_df,clust_list=x,GOcats=GOBP,goterms=goterms,numcats=10,org_db="org.Mm.eg.db")
 go_vis_sc2$plot
 
 ##plot panel for figure 2
-y<-c("neurogenesis","tissue development","aging","head development","cell morphogenesis",
-     "programmed cell death","response to abiotic stimulus","regulation of transport","cell projection organization")
-test<-GO_viz_choose(go_vis_sc2,clust_list=x,chosen_cats=y,goterms=goterms,species_x="Mus musculus")
+y<-c("neurogenesis","tissue development","aging","cell morphogenesis","regulation of cell differentiation",
+     "programmed cell death","response to abiotic stimulus","regulation of transport","cell projection organization","cytokine production")
+test1<-GO_viz_choose(go_vis_sc2,clust_list=x,chosen_cats=y,goterms=goterms,species_x="Mus musculus")
+plot(test1$plot)
+
+pdf("GO_enrich_Panel.pdf")
 plot(test$plot)
+plot(test1$plot)
+dev.off()
 
 ###write tables for supplement
 write.csv(go_vis_sc$GO_sem,"celltype_GO_table.csv")
 write.csv(go_vis_sc2$GO_sem,"group_GO_table.csv")
-
-
-x<-obj@misc$group
-y<-as.numeric(x$cluster)
-y<-replace(y,which(y==1),"Young_anterior")
-y<-replace(y,which(y==2),"old_anterior")
-y<-replace(y,which(y==3),"Young_posterior")
-y<-replace(y,which(y==4),"old_posterior")
-x$cluster<-y
-write.csv(x,"Age_position_markers.csv")
-write.csv(obj@misc$celltype,"Celltye_markers.csv")
 
 ###obtain Schizophrenia data from BrainSeq phase II
 ###https://eqtl.brainseq.org/phase2/
@@ -674,7 +678,149 @@ LRM_anno<-df1
 
 write.csv(rbind(LRF_anno,LRM_anno),"LR_schizo_all.csv")
 
+###make networks for cytoscape and paper figure
+##female
+LRF_sig$mus_gene<-LRF_sig$receptor_gene_symbol 
+x<-left_join(LRF_sig,resF.sig,by="mus_gene")
+x$mus_gene<-x$ligand_gene_symbol
+LRFsig_anno$mus_gene<-LRFsig_anno$gene
+y<-left_join(x,LRFsig_anno,by="mus_gene")
+y<-y[,-3]
+colnames(y)<-c(colnames(LRF),
+               paste("Receptor",colnames(resF.sig)[1:4],sep="_"),
+               paste("Ligand",colnames(LRFsig_anno)[1:3],sep="_"))
+y<-y[,-9]
+z<-c(rep("ligand",dim(y)[1]),rep("receptor",dim(y)[1]))
+z<-data.frame(c(y[,1],y[,2]),
+              z,
+              c(y$Ligand_age_reg,rep(0,dim(y)[1])),
+              c(y$Ligand_celltype,rep(0,dim(y)[1])),
+              c(rep(0,dim(y)[1]),y$Receptor_logFC)
+              )
+colnames(z)<-c("Gene","Type","Age_region","Cell","Schizo_logFC")
+z<-z[!duplicated(z), ]
+test<-graph_from_data_frame(y[,1:2],vertices=z)
+plot(test)
+createNetworkFromIgraph(test,"SFemale")
 
+##Male
+LRM_sig$mus_gene<-LRM_sig$receptor_gene_symbol 
+x<-left_join(LRM_sig,resM.sig,by="mus_gene")
+x$mus_gene<-x$ligand_gene_symbol
+LRMsig_anno$mus_gene<-LRMsig_anno$gene
+y<-left_join(x,LRMsig_anno,by="mus_gene")
+y<-y[,-3]
+colnames(y)<-c(colnames(LRM),
+               paste("Receptor",colnames(resF.sig)[1:4],sep="_"),
+               paste("Ligand",colnames(LRFsig_anno)[1:3],sep="_"))
+y<-y[,-9]
+z<-c(rep("ligand",dim(y)[1]),rep("receptor",dim(y)[1]))
+z<-data.frame(c(y[,1],y[,2]),
+              z,
+              c(y$Ligand_age_reg,rep(0,dim(y)[1])),
+              c(y$Ligand_celltype,rep(0,dim(y)[1])),
+              c(rep(0,dim(y)[1]),y$Receptor_logFC)
+)
+colnames(z)<-c("Gene","Type","Age_region","Cell","Schizo_logFC")
+z<-z[!duplicated(z), ]
+test<-graph_from_data_frame(y[,1:2],vertices=z)
+plot(test)
+createNetworkFromIgraph(test,"SMale")
+
+###check if receptors for meninges secreted ligands are enriched
+###female
+x<-unique(LRF_sig$receptor_gene_symbol)
+z<-intersect(rownames(resF[resF$baseMean>15,]),humLR$receptor_ensembl_gene_id)
+z<-orthologs(z,species="mouse")$symbol
+
+phyper(length(x),
+       length(intersect(z,resF.sig$mus_gene)),
+       length(rownames(resF[resF$baseMean>15,]))-length(z),
+       length(unique(resF.sig$mus_gene))-1,lower.tail=F)
+###1.584996e-27
+
+###Male
+
+x<-unique(LRM_sig$receptor_gene_symbol)
+z<-intersect(rownames(resM[resM$baseMean>15,]),humLR$receptor_ensembl_gene_id)
+z<-orthologs(z,species="mouse")$symbol
+
+phyper(length(x),
+       length(intersect(z,resM.sig$mus_gene)),
+       length(rownames(resM[resM$baseMean>15,]))-length(z),
+       length(unique(resM.sig$mus_gene))-1,lower.tail=F)
+###1.153724e-25
+
+####test to see if general mouse fibroblasts and endothelial cells have enriched synapse categories
+
+x<-go_vis_sc$GO_sem
+y<-x[grep("Fibro",x$cluster),]
+length(unique(y$term))
+length(unique(y[grep("synap",y$term),]$term))
+length(unique(y[grep("neur",y$term),]$term))
+y<-x[grep("Endo",x$cluster),]
+length(unique(y$term))
+length(unique(y[grep("synap",y$term),]$term))
+length(unique(y[grep("neur",y$term),]$term))
+
+##get markers from PanglaoDB
+pangdb<-data.frame(read.delim("PanglaoDB_markers_27_Mar_2020.tsv",as.is=T))
+pangdb<-pangdb[grep("Mm",pangdb$species),]
+
+test<-pangdb[grep("Fibro",pangdb$cell.type),]
+x<-test$official.gene.symbol
+x<-orthologs(x,species="mouse")$symbol
+y<-list(x)
+fibro_test<-enrich_test(clust_list=y,species_x="Mus musculus",genome_genes=42937)
+x<-fibro_test$Enriched_df[[1]]$GOBP
+x[grep("SYNAP",x$label),]$label
+x[grep("NEUR",x$label),]$label
+###no synaptic categories were enriched out, 27 enriched categories related to neuron/neural
+###out of a total of 994 enriched categories 
+
+test<-pangdb[grep("Endo",pangdb$cell.type),]
+x<-test$official.gene.symbol
+x<-orthologs(x,species="mouse")$symbol
+y<-list(x)
+endo_test<-enrich_test(clust_list=y,species_x="Mus musculus",genome_genes=42937)
+x<-endo_test$Enriched_df[[1]]$GOBP
+x[grep("SYNAP",x$label),]$label
+x[grep("NEUR",x$label),]$label
+###endo has two synapse cats and 18 neuron cats out of 1095
+
+#####compare to embryonic meninges PMID:32634398
+library(VennDiagram)
+embryo_men<-read.csv("PMID32634398_Table_S3.csv")
+x<-embryo_men[embryo_men$p_val_adj<0.05,]
+y<-unique(x$cluster)
+x<-foreach(i=1:length(unique(x$cluster))) %do% {
+  x[x$cluster==unique(x$cluster)[i],]$gene
+}
+names(x)<-y
+emen_res<-enrich_test(clust_list=x,species_x="Mus musculus",genome_genes=42937)
+go_vis_emen<-GO_visualization(emen_res$Enriched_df,clust_list=x,GOcats=GOBP,goterms=goterms,numcats=10,org_db="org.Mm.eg.db")
+x<-go_vis_sc$GO_sem[grep("Fibro",go_vis_sc$GO_sem$cluster),]$parentTerm
+ggVennDiagram(list("Adult"=x,"Embryonic"=go_vis_emen$GO_sem$parentTerm))
+draw.pairwise.venn(area1=(103+89),area2=(54+89),cross.area = 89,fill = c("blue", "red"), alpha = rep(0.4, 2),
+                   category=c("Adult","Embryo"))
+dev.off()
+ggVennDiagram(list("Adult"=go_vis_sc2$GO_sem$parentTerm,"Embryonic"=go_vis_emen$GO_sem$parentTerm))
+draw.pairwise.venn(area1=(81+81),area2=(62+81),cross.area = 81,fill = c("blue", "red"), alpha = rep(0.4, 2),
+                   category=c("Adult","Embryo"))
+dev.off()
+y<-obj@misc$celltype
+y<-y[y$p_val_adj<0.05,]
+y<-unique(y[grep("Fibro",y$cluster),]$gene)
+ggVennDiagram(list("Adult"=y,"Embryonic"=unique(unlist(x))))
+draw.pairwise.venn(area1=(2863+205),area2=(437+205),cross.area = 205,fill = c("blue", "red"), alpha = rep(0.4, 2),
+                   category=c("Adult","Embryo"))
+dev.off()
+x<-go_vis_emen$GO_sem$term
+length(unique(x))
+x[grep("synap",x)]
+##19
+x[grep("neur",x)]
+##90 out of 1073
 
 
 
